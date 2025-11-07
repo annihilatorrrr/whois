@@ -73,7 +73,7 @@ KNOWN_FORMATS: list[str] = [
 ]
 
 
-def datetime_parse(s: str) -> Union[str, datetime]:
+def datetime_parse(s: str) -> Union[datetime, None]:
     for known_format in KNOWN_FORMATS:
         try:
             parsed = datetime.strptime(s, known_format)
@@ -83,13 +83,19 @@ def datetime_parse(s: str) -> Union[str, datetime]:
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             return parsed
-    raise WhoisUnknownDateFormatError(f"Unknown date format: {s}")
 
 
 def cast_date(
     s: str, dayfirst: bool = False, yearfirst: bool = False
 ) -> Union[str, datetime]:
     """Convert any date string found in WHOIS to a datetime object."""
+
+    # prefer our conversion before dateutil.parser
+    # because dateutil.parser does %m.%d.%Y and ours has %d.%m.%Y which is more logical
+    parsed = datetime_parse(s)
+    if parsed:
+        return parsed
+
     try:
         # Use datetime.timezone.utc to support < Python3.9
         return default_tzinfo(
@@ -97,7 +103,7 @@ def cast_date(
             timezone.utc,
         )
     except dp.ParserError:
-        return datetime_parse(s)
+        raise WhoisUnknownDateFormatError(f"Unknown date format: {s}") from None
 
 
 class WhoisEntry(dict):
