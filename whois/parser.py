@@ -69,11 +69,12 @@ KNOWN_FORMATS: list[str] = [
     "before %Y-%m-%d",  # before 1996-01-01
     "before %Y%m%d",  # before 19960821
     "%Y-%m-%d %H:%M:%S (%Z%z)",  # 2017-09-26 11:38:29 (GMT+00:00)
+    "%Y-%m-%d %H:%M:%S (%Z+0:00)",  # 2009-07-01 12:44:02 (GMT+0:00)
     "%Y-%b-%d.",  # 2024-Apr-02.
 ]
 
 
-def datetime_parse(s: str) -> Union[str, datetime]:
+def datetime_parse(s: str) -> Union[datetime, None]:
     for known_format in KNOWN_FORMATS:
         try:
             parsed = datetime.strptime(s, known_format)
@@ -83,13 +84,19 @@ def datetime_parse(s: str) -> Union[str, datetime]:
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             return parsed
-    raise WhoisUnknownDateFormatError(f"Unknown date format: {s}")
 
 
 def cast_date(
     s: str, dayfirst: bool = False, yearfirst: bool = False
 ) -> Union[str, datetime]:
     """Convert any date string found in WHOIS to a datetime object."""
+
+    # prefer our conversion before dateutil.parser
+    # because dateutil.parser does %m.%d.%Y and ours has %d.%m.%Y which is more logical
+    parsed = datetime_parse(s)
+    if parsed:
+        return parsed
+
     try:
         # Use datetime.timezone.utc to support < Python3.9
         return default_tzinfo(
@@ -97,7 +104,7 @@ def cast_date(
             timezone.utc,
         )
     except dp.ParserError:
-        return datetime_parse(s)
+        raise WhoisUnknownDateFormatError(f"Unknown date format: {s}") from None
 
 
 class WhoisEntry(dict):
@@ -1723,8 +1730,8 @@ class WhoisKg(WhoisEntry):
         "name_servers": r"Name servers in the listed order: *([\d\w\.\s]+)",
         # 'name_servers':                 r'([\w]+\.[\w]+\.[\w]{2,5}\s*\d{1,3}\.\d]{1,3}\.[\d]{1-3}\.[\d]{1-3})',
         "creation_date": r"Record created: *(.+)",
-        "expiration_date": r"Record expires on \s*(.+)",
-        "updated_date": r"Record last updated on\s*(.+)",
+        "expiration_date": r"Record expires on:\s*(.+)",
+        "updated_date": r"Record last updated on:\s*(.+)",
     }
 
     def __init__(self, domain: str, text: str):

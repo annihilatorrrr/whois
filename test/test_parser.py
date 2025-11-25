@@ -45,7 +45,7 @@ class TestParser(unittest.TestCase):
 
     def test_unknown_date_format(self):
         with self.assertRaises(WhoisUnknownDateFormatError):
-            datetime_parse("UNKNOWN")
+            cast_date("UNKNOWN")
 
     def test_com_allsamples(self):
         """
